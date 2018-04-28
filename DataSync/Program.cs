@@ -12,11 +12,8 @@ namespace DataSync
         {
             XmlConfigurator.ConfigureAndWatch(new FileInfo("log4net.config"));
 
-            if (Starter.AddFirewallRule("Data Sync Inbound Rule", "Service.exe",
-                    FirewallDirection.Inbound) &&
-                Starter.AddFirewallRule("Data Sync Outbound Rule", "Service.exe",
-                    FirewallDirection.Outbound))
-                Starter.Start();
+            Starter.Start();
+
             var command = string.Empty;
             while (command != null && command.ToLower() != "exit")
             {

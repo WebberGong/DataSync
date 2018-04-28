@@ -3,6 +3,9 @@ using System.Threading.Tasks;
 using Common;
 using Entity;
 using Newtonsoft.Json;
+using System.Linq.Expressions;
+using System;
+using System.Linq;
 
 namespace DataSync
 {
@@ -29,9 +32,9 @@ namespace DataSync
             }
         }
 
-        public async Task<IList<Carrier>> GetEntities()
+        public async Task<List<Carrier>> GetEntities()
         {
-            var response = await WebApi.Get("api/TMSYX/BaseSync/GetCarrierTaxNumbers");
+            var response = await WebApi.GetAsync("api/TMSYX/BaseSync/GetCarrierTaxNumbers");
             if (Utility.IsResponseSuccess(response))
             {
                 var results = new List<Carrier>();
@@ -41,6 +44,37 @@ namespace DataSync
                 return results;
             }
             return new List<Carrier>();
+        }
+
+        public bool IsUpdateOnly => false;
+
+        public bool IsForceInitSync => true;
+
+        public Expression<Func<Carrier, bool>> SynchronizationWhere()
+        {
+            return x => x.IsValid == 1;
+        }
+
+        public Expression<Func<Carrier, bool>> UpdateWhere(IEnumerable<Carrier> filter)
+        {
+            var keys = filter.Select(x => x.TaxNumber).ToList();
+            return x => keys.Contains(x.TaxNumber);
+        }
+
+        public Expression<Func<Carrier, bool>> DeleteWhere()
+        {
+            return x => false;
+        }
+
+        public List<Carrier> GetPeriodicalSyncEntities()
+        {
+            using (var dbContext = new DatabaseContext<Carrier>())
+            {
+                var haveUpdateTimeColumn = DataSynchronizer<Carrier>.HaveUpdateTimeColumn();
+                var lastSyncTime = Settings.GetLastSyncTime();
+                var result = dbContext.Entities.IncludeAll().Where(x => (!haveUpdateTimeColumn || string.Compare(x.UpdateTime, lastSyncTime, StringComparison.CurrentCulture) >= 0)).ToList();
+                return result;
+            }
         }
     }
 }

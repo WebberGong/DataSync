@@ -4,12 +4,16 @@ using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq.Expressions;
 using Entity.Attribute;
 using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Entity
 {
     [DefaultTable("YX_YX_YXINFO")]
     public class YxProcess : BaseEntity
     {
+        private string _comparerKey;
+
         [Key]
         [Column("YXID")]
         [JsonIgnore]
@@ -26,6 +30,10 @@ namespace Entity
         [JsonIgnore]
         [ForeignKey("SendTruckId")]
         public SendTruck SendTruck { get; set; }
+
+        [NotMapped]
+        [JsonIgnore]
+        public string SendTruckTime => SendTruck?.SendTruckTime;
 
         [Column("WID")]
         [JsonIgnore]
@@ -51,14 +59,16 @@ namespace Entity
         [JsonProperty("yxStatus")]
         public int? YxStatus { get; set; }
 
-        [NotMapped]
+        [Column("MODIFYTIME")]
         public override string UpdateTime { get; set; }
 
-        public override string ComparerKey => Id;
+        public override string ComparerKey => string.IsNullOrEmpty(_comparerKey) ? DispatchSn : _comparerKey;
 
-        public new static Expression<Func<YxProcess, bool>> SynchronizationWhere()
+        public override string ComparerValue => ComparerKey + "," + YxStatus + "," + (Weight?.Jz ?? 0) + "," + (Weight?.Pz ?? 0);
+
+        public void SetComparerKey(string comparerKey)
         {
-            return x => true;
+            _comparerKey = comparerKey;
         }
     }
 }

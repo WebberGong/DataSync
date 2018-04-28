@@ -55,6 +55,14 @@ namespace Entity
         [JsonProperty("coalID")]
         public string CoalId { get; set; }
 
+        [JsonIgnore]
+        [ForeignKey("CoalId")]
+        public Coal Coal { get; set; }
+
+        [NotMapped]
+        [JsonProperty("coalName")]
+        public string CoalName => Coal?.Name;
+
         [Column("AREA")]
         [JsonProperty("area")]
         public string Area { get; set; }
@@ -147,10 +155,5 @@ namespace Entity
         public override string UpdateTime { get; set; }
 
         public override string ComparerKey => Code;
-
-        public new static Expression<Func<Contract, bool>> SynchronizationWhere()
-        {
-            return x => x.SpState == 2;
-        }
     }
 }

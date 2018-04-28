@@ -79,10 +79,5 @@ namespace Entity
         public override string UpdateTime { get; set; }
 
         public override string ComparerKey => TaxNumber;
-
-        public new static Expression<Func<Seller, bool>> SynchronizationWhere()
-        {
-            return x => x.IsValid == 1;
-        }
     }
 }

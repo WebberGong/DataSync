@@ -16,31 +16,13 @@ namespace DataSync
 {
     public class DataSynchronizer<TEntity> where TEntity : BaseEntity
     {
-        private const string SynchronizationWhere = "SynchronizationWhere";
-
-        private static readonly ConcurrentDictionary<string, Expression<Func<TEntity, bool>>>
-            SynchronizationWhereDictionary =
-                new ConcurrentDictionary<string, Expression<Func<TEntity, bool>>>();
-
         public static string EntityType => typeof(TEntity).FullName;
 
-        public static IList<TEntity> SourceEntities { get; private set; }
+        public static List<TEntity> SourceEntities { get; private set; }
 
-        public static IList<TEntity> DestinationEntities { get; private set; }
+        public static List<TEntity> DestinationEntities { get; private set; }
 
-        public static IList<TEntity> SyncEntities { get; private set; }
-
-        public static Expression<Func<TEntity, bool>> GetSynchronizationWhere()
-        {
-            var entityType = typeof(TEntity);
-            var key = $"{entityType.FullName}";
-            Expression<Func<TEntity, bool>> value;
-            if (SynchronizationWhereDictionary.TryGetValue(key, out value)) return value;
-            var method = entityType.GetMethod(SynchronizationWhere);
-            var expression = (Expression<Func<TEntity, bool>>) method.Invoke(null, null);
-            SynchronizationWhereDictionary.TryAdd(key, expression);
-            return expression;
-        }
+        public static List<TEntity> SyncFaildEntities { get; private set; }
 
         public static async Task InitData(IDataProvider<TEntity> dataProvider)
         {
@@ -49,18 +31,22 @@ namespace DataSync
                 using (var dbContext = new DatabaseContext<TEntity>())
                 {
                     var predicate = PredicateBuilder.New<TEntity>(true);
-                    predicate = predicate.And(GetSynchronizationWhere());
+                    predicate = predicate.And(dataProvider.SynchronizationWhere());
 
                     if (!Settings.IsSyncAllData && HaveUpdateTimeColumn())
                     {
                         var lastSyncTime = Settings.GetLastSyncTime();
                         predicate = predicate.And(x =>
-                            string.Compare(x.UpdateTime, lastSyncTime, StringComparison.Ordinal) > 0 ||
+                            string.Compare(x.UpdateTime, lastSyncTime, StringComparison.CurrentCulture) >= 0 ||
                             string.IsNullOrEmpty(x.UpdateTime));
                     }
-                    SourceEntities = await dbContext.Entities.IncludeAll().ToListAsync();
-                    SyncEntities = SourceEntities.Where(predicate).ToList();
                     DestinationEntities = await dataProvider.GetEntities();
+                    if (dataProvider.IsUpdateOnly)
+                    {
+                        predicate = predicate.And(dataProvider.UpdateWhere(DestinationEntities));
+                    }
+                    SourceEntities = await dbContext.Entities.IncludeAll().Where(predicate).ToListAsync();
+                    SyncFaildEntities = new List<TEntity>();
                 }
             }
             catch (Exception ex)
@@ -74,26 +60,88 @@ namespace DataSync
             try
             {
                 var tasks = new List<Task>();
-                foreach (var sourceEntity in SyncEntities)
+                foreach (var sourceEntity in SourceEntities)
                     if (DestinationEntities.Any(x => x.ComparerKey == sourceEntity.ComparerKey))
                     {
-                        var destinationEntities =
-                            DestinationEntities.Where(x => x.ComparerKey == sourceEntity.ComparerKey);
-                        foreach (var destinationEntity in destinationEntities)
-                            tasks.Add(Update(dataProcesser, dataProvider, sourceEntity, destinationEntity));
+                        if (!Settings.IsSyncNewDataOnly)
+                        {
+                            var destinationEntities =
+                                DestinationEntities.Where(x => x.ComparerKey == sourceEntity.ComparerKey);
+                            foreach (var destinationEntity in destinationEntities)
+                                if (dataProvider.IsForceInitSync || sourceEntity.ComparerValue != destinationEntity.ComparerValue)
+                                    tasks.Add(Update(dataProcesser, dataProvider, sourceEntity, destinationEntity));
+                        }
                     }
                     else
                     {
-                        tasks.Add(Insert(dataProcesser, dataProvider, sourceEntity));
+                        if (!dataProvider.IsUpdateOnly)
+                            tasks.Add(Insert(dataProcesser, dataProvider, sourceEntity));
                     }
-                Task.WaitAll(tasks.ToArray());
+                await Task.WhenAll(tasks.ToArray());
                 if (Settings.IsUpdateDateTime && HaveUpdateTimeColumn())
                     await UpdateDateTime();
+
+                var keys = DestinationEntities.Where(dataProvider.DeleteWhere().Compile()).Select(x => x.ComparerKey).ToList();
+                DestinationEntities.RemoveAll(x => keys.Contains(x.ComparerKey));
+                SourceEntities.RemoveAll(x => keys.Contains(x.ComparerKey));
             }
             catch (Exception ex)
             {
                 Utility.LogFatalOrThrowException(ex, $"同步数据异常, 实体类型: {EntityType}");
             }
+        }
+
+        public static async Task PeriodicalSynchronize(IDataProcesser<TEntity> dataProcesser, IDataProvider<TEntity> dataProvider)
+        {
+            var entities = dataProvider.GetPeriodicalSyncEntities();
+            var syncCount = entities.Count;
+            var faildCount = SyncFaildEntities.Count;
+            await LogHelper.LogInfoAsync($"定时同步, 实体类型: {EntityType}, 需要同步的数据总数: {syncCount}, 同步失败的数据总数: {faildCount}");
+            var comparerKeys = entities.Select(x => x.ComparerKey).ToList();
+            SyncFaildEntities = SyncFaildEntities.Where(x => !comparerKeys.Contains(x.ComparerKey)).ToList();
+            entities.AddRange(SyncFaildEntities);
+            foreach (var entity in entities)
+            {
+                var existed = DestinationEntities.FirstOrDefault(x => x.ComparerKey == entity.ComparerKey);
+                if (entity.ComparerKey == null || existed == null)
+                {
+                    if (await dataProcesser.Save(entity))
+                    {
+                        await dataProcesser.Sync(entity);
+                        entity.Synchronized = true;
+                        DestinationEntities.Add(entity);
+                        if (SyncFaildEntities.Any(x => x.ComparerKey == entity.ComparerKey))
+                            SyncFaildEntities.Remove(entity);
+                    }
+                    else
+                    {
+                        if (SyncFaildEntities.All(x => x.ComparerKey != entity.ComparerKey || x.ComparerValue != entity.ComparerValue))
+                            SyncFaildEntities.Add(entity);
+                    }
+                }
+                else
+                {
+                    if (entity.ComparerValue != existed.ComparerValue)
+                    {
+                        if (await dataProcesser.Save(entity))
+                        {
+                            await dataProcesser.Sync(entity);
+                            entity.Synchronized = true;
+                            entity.AssignTo(existed);
+                            if (SyncFaildEntities.Any(x => x.ComparerKey == entity.ComparerKey))
+                                SyncFaildEntities.Remove(entity);
+                        }
+                        else
+                        {
+                            if (SyncFaildEntities.All(x => x.ComparerKey != entity.ComparerKey || x.ComparerValue != entity.ComparerValue))
+                                SyncFaildEntities.Add(entity);
+                        }
+                    }
+                }
+            }
+            var keys = DestinationEntities.Where(dataProvider.DeleteWhere().Compile()).Select(x => x.ComparerKey).ToList();
+            DestinationEntities.RemoveAll(x => keys.Contains(x.ComparerKey));
+            SourceEntities.RemoveAll(x => keys.Contains(x.ComparerKey));
         }
 
         public static async Task<bool> Insert(IDataProcesser<TEntity> dataProcesser,
@@ -104,13 +152,17 @@ namespace DataSync
 
             try
             {
-                if (await dataProcesser.Save(sourceEntity))
+                if (await RetryWhenFaild(dataProcesser.Save(sourceEntity), 3))
                 {
                     sourceEntity.Synchronized = true;
                     DestinationEntities.Add(sourceEntity);
+                    if (SyncFaildEntities.Any(x => x.ComparerKey == sourceEntity.ComparerKey))
+                        SyncFaildEntities.Remove(sourceEntity);
                     await LogHelper.LogInfoAsync($"{msg}, 成功, 实体类型: {EntityType}");
                     return true;
                 }
+                if (SyncFaildEntities.All(x => x.ComparerKey != sourceEntity.ComparerKey || x.ComparerValue != sourceEntity.ComparerValue))
+                    SyncFaildEntities.Add(sourceEntity);
                 await LogHelper.LogErrorAsync($"{msg}, 失败, 实体类型: {EntityType}");
                 return false;
             }
@@ -130,13 +182,17 @@ namespace DataSync
 
             try
             {
-                if (await dataProcesser.Save(sourceEntity))
+                if (await RetryWhenFaild(dataProcesser.Save(sourceEntity), 3))
                 {
                     sourceEntity.Synchronized = true;
                     sourceEntity.AssignTo(destinationEntity);
+                    if (SyncFaildEntities.Any(x => x.ComparerKey == sourceEntity.ComparerKey))
+                        SyncFaildEntities.Remove(sourceEntity);
                     await LogHelper.LogInfoAsync($"{msg}, 成功, 实体类型: {EntityType}");
                     return true;
                 }
+                if (SyncFaildEntities.All(x => x.ComparerKey != sourceEntity.ComparerKey || x.ComparerValue != sourceEntity.ComparerValue))
+                    SyncFaildEntities.Add(sourceEntity);
                 await LogHelper.LogErrorAsync($"{msg}, 失败, 实体类型: {EntityType}");
                 return false;
             }
@@ -153,7 +209,7 @@ namespace DataSync
             {
                 using (var dbContext = new DatabaseContext<TEntity>())
                 {
-                    var synchronizedEntities = SyncEntities.Where(x => x.Synchronized).ToList();
+                    var synchronizedEntities = SourceEntities.Where(x => x.Synchronized).ToList();
                     var now = DateTime.Now.ToFormattedString();
                     foreach (var item in synchronizedEntities)
                     {
@@ -171,10 +227,23 @@ namespace DataSync
             }
         }
 
-        private static bool HaveUpdateTimeColumn()
+        public static bool HaveUpdateTimeColumn()
         {
-            var prop = Utility.GetPropertie<TEntity>("UpdateTime");
+            var prop = Assistance.GetPropertie<TEntity>("UpdateTime");
             return prop?.GetCustomAttribute<ColumnAttribute>() != null;
+        }
+
+        private static async Task<bool> RetryWhenFaild(Task<bool> task, int maxRetryCount)
+        {
+            int retryCount = 0;
+            bool result;
+            do
+            {
+                result = await task;
+                retryCount++;
+            }
+            while (!result && retryCount < maxRetryCount);
+            return result;
         }
     }
 }

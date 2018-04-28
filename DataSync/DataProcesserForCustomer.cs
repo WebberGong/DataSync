@@ -1,6 +1,7 @@
 ﻿using System.Threading.Tasks;
 using Common;
 using Entity;
+using System.Collections.Generic;
 
 namespace DataSync
 {
@@ -29,8 +30,12 @@ namespace DataSync
 
         public async Task<bool> Save(Customer entity)
         {
-            var response = await WebApi.Post("api/TMSYX/BaseSync/SaveCustomer", entity);
-            return Utility.IsResponseSuccess(response);
+            return await WebApi.SimplePostAsync("api/TMSYX/BaseSync/SaveCustomer", entity);
+        }
+
+        public async Task Sync(Customer entity)
+        {
+            await Relationships.AddCooperationCorpForCustomer(entity);
         }
     }
 }

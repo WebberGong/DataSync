@@ -56,10 +56,14 @@ namespace DataSync
                 return false;
             }
 
-            var response = await WebApi.Post<BaseEntity>(
+            return await WebApi.SimplePostAsync(
                 $"api/TMSYX/YXDispatch/WriteDispSendGross?dispatchSN={entity.DispatchSn}&" +
-                $"truck_no={entity.TruckNumber}&pz={entity.Pz}&mz={entity.Mz}&jz={entity.Jz}");
-            return Utility.IsResponseSuccess(response);
+                $"truck_no={entity.TruckNumber}&pz={entity.Pz}&mz={entity.Mz}&jz={entity.Jz}", new object());
+        }
+
+        public async Task Sync(Weight entity)
+        {
+            await Task.Run(() => true);
         }
     }
 }

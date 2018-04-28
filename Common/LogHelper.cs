@@ -8,64 +8,74 @@ namespace Common
 {
     public class LogHelper
     {
-        public static void LogInfo(string info)
+        public static void LogInfo(string info, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Info(info);
-            WriteRemoteLog(info);
+            if (isWriteRemoteLog)
+                WriteRemoteLog(info);
         }
 
-        public static void LogWarn(string warn)
+        public static void LogWarn(string warn, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Warn(warn);
-            WriteRemoteLog(warn);
+            if (isWriteRemoteLog)
+                WriteRemoteLog(warn);
         }
 
-        public static void LogDebug(string debug)
+        public static void LogDebug(string debug, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Debug(debug);
-            WriteRemoteLog(debug);
+            if (isWriteRemoteLog)
+                WriteRemoteLog(debug);
         }
 
-        public static void LogError(string error, Exception ex = null)
+        public static void LogError(string error, Exception ex = null, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Error(error, ex);
-            WriteRemoteLog(error + "\r\n" + (ex == null ? string.Empty : ex.ToFormattedString()));
+            if (isWriteRemoteLog)
+                WriteRemoteLog(error + "\r\n" + (ex == null ? string.Empty : ex.ToFormattedString()));
         }
 
-        public static void LogFatal(string fatal, Exception ex = null)
+        public static void LogFatal(string fatal, Exception ex = null, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Fatal(fatal, ex);
-            WriteRemoteLog(fatal + "\r\n" + (ex == null ? string.Empty : ex.ToFormattedString()));
+            if (isWriteRemoteLog)
+                WriteRemoteLog(fatal + "\r\n" + (ex == null ? string.Empty : ex.ToFormattedString()));
         }
 
-        public static async Task LogInfoAsync(string info)
+        public static async Task LogInfoAsync(string info, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Info(info);
-            await WriteRemoteLogAsync(info);
+            if (isWriteRemoteLog)
+                await WriteRemoteLogAsync(info);
         }
 
-        public static async Task LogWarnAsync(string warn)
+        public static async Task LogWarnAsync(string warn, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Warn(warn);
-            await WriteRemoteLogAsync(warn);
+            if (isWriteRemoteLog)
+                await WriteRemoteLogAsync(warn);
         }
 
-        public static async Task LogDebugAsync(string debug)
+        public static async Task LogDebugAsync(string debug, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Debug(debug);
-            await WriteRemoteLogAsync(debug);
+            if (isWriteRemoteLog)
+                await WriteRemoteLogAsync(debug);
         }
 
-        public static async Task LogErrorAsync(string error, Exception ex = null)
+        public static async Task LogErrorAsync(string error, Exception ex = null, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Error(error, ex);
-            await WriteRemoteLogAsync(error + "\r\n" + (ex == null ? string.Empty : ex.ToFormattedString()));
+            if (isWriteRemoteLog)
+                await WriteRemoteLogAsync(error + "\r\n" + (ex == null ? string.Empty : ex.ToFormattedString()));
         }
 
-        public static async Task LogFatalAsync(string fatal, Exception ex = null)
+        public static async Task LogFatalAsync(string fatal, Exception ex = null, bool isWriteRemoteLog = true)
         {
             LogManager.GetLogger(GetTypeFromStackTrace()).Fatal(fatal, ex);
-            await WriteRemoteLogAsync(fatal + "\r\n" + (ex == null ? string.Empty : ex.ToFormattedString()));
+            if (isWriteRemoteLog)
+                await WriteRemoteLogAsync(fatal + "\r\n" + (ex == null ? string.Empty : ex.ToFormattedString()));
         }
 
         public static async Task<string> ReadLog()

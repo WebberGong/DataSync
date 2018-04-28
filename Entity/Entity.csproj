@@ -49,10 +49,12 @@
   <ItemGroup>
     <Compile Include="Attribute\NotificationIgnoreAttribute.cs" />
     <Compile Include="BaseEntity.cs" />
+    <Compile Include="Coal.cs" />
     <Compile Include="Contract.cs" />
     <Compile Include="Carrier.cs" />
     <Compile Include="Customer.cs" />
     <Compile Include="Attribute\DefaultTableAttribute.cs" />
+    <Compile Include="DistinctComparer.cs" />
     <Compile Include="SendTruck.cs" />
     <Compile Include="Settings.cs" />
     <Compile Include="Weight.cs" />

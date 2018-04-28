@@ -38,11 +38,6 @@ namespace Entity
         [NotMapped]
         public override string UpdateTime { get; set; }
 
-        public override string ComparerKey => Id;
-
-        public new static Expression<Func<Weight, bool>> SynchronizationWhere()
-        {
-            return x => true;
-        }
+        public override string ComparerKey => DispatchSn;
     }
 }

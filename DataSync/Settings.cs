@@ -13,11 +13,15 @@ namespace DataSync
 
         public static bool IsSyncAllData => GetBool("IsSyncAllData");
 
+        public static bool IsSyncNewDataOnly => GetBool("IsSyncNewDataOnly");
+
         public static bool IsUpdateDateTime => GetBool("IsUpdateDateTime");
 
         public static bool IsPersistentNotification => GetBool("IsPersistentNotification");
 
         public static bool LazyLoadingEnabled => GetBool("LazyLoadingEnabled");
+
+        public static int PeriodicalSynchronizeInterval => GetInt("PeriodicalSynchronizeInterval");
 
         public static DateTime LastSyncTime
         {
@@ -27,7 +31,8 @@ namespace DataSync
 
         public static string GetLastSyncTime()
         {
-            return LastSyncTime.ToFormattedString();
+            //减去三秒偏移量
+            return LastSyncTime.AddSeconds(-3).ToFormattedString();
         }
 
         private static DateTime GetDateTime(string key)
@@ -51,6 +56,13 @@ namespace DataSync
         {
             bool value;
             return bool.TryParse(ConfigurationManager.AppSettings[key], out value) && value;
+        }
+
+        private static int GetInt(string key)
+        {
+            int value = 60;
+            int.TryParse(ConfigurationManager.AppSettings[key], out value);
+            return value;
         }
     }
 }

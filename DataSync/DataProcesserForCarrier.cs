@@ -29,8 +29,12 @@ namespace DataSync
 
         public async Task<bool> Save(Carrier entity)
         {
-            var response = await WebApi.Post("api/TMSYX/BaseSync/SaveCarrier", entity);
-            return Utility.IsResponseSuccess(response);
+            return await WebApi.SimplePostAsync("api/TMSYX/BaseSync/SaveCarrier", entity);
+        }
+
+        public async Task Sync(Carrier entity)
+        {
+            await Relationships.AddCooperationCorpForCarrier(entity);
         }
     }
 }

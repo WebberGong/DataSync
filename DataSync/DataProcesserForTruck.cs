@@ -29,8 +29,12 @@ namespace DataSync
 
         public async Task<bool> Save(Truck entity)
         {
-            var response = await WebApi.Post("api/TMSYX/BaseSync/SaveTruck", entity);
-            return Utility.IsResponseSuccess(response);
+            return await WebApi.SimplePostAsync("api/TMSYX/BaseSync/SaveTruck", entity);
+        }
+
+        public async Task Sync(Truck entity)
+        {
+            await Relationships.AddCorpCars(entity);
         }
     }
 }

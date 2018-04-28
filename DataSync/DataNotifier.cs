@@ -14,9 +14,9 @@ namespace DataSync
     {
         private const string RowId = "Rowid";
 
-        public static string QueryExpression => Utility.GetQueryExpression<TEntity>();
+        public static string QueryExpression => Assistance.GetQueryExpression<TEntity>();
 
-        public static IList<TEntity> CachedEntities => DataSynchronizer<TEntity>.SourceEntities;
+        public static List<TEntity> CachedEntities => DataSynchronizer<TEntity>.SourceEntities;
 
         public static string EntityType => typeof(TEntity).FullName;
 
@@ -45,7 +45,7 @@ namespace DataSync
                             var changedMsg =
                                 $"{args.Info} {string.Join(",", args.ResourceNames)}:{JsonConvert.SerializeObject(changedEntity)}";
                             await LogHelper.LogWarnAsync($"接收到数据修改通知: {changedMsg}");
-                            if (DataSynchronizer<TEntity>.GetSynchronizationWhere().Compile().Invoke(changedEntity))
+                            if (dataProvider.SynchronizationWhere().Compile().Invoke(changedEntity))
                             {
                                 if (await ProcessChangedData(dataProcesser, dataProvider, changedEntity, args.Info))
                                     MaintainCachedEntities(changedEntity, args.Info);
@@ -78,10 +78,8 @@ namespace DataSync
         {
             ValidateOperationType(operationType);
 
-            var entity = operationType == OracleNotificationInfo.Delete
-                ? CachedEntities.FirstOrDefault(x => x.RowId == rowId)
-                : dbContext.Entities.IncludeAll().ToList().FirstOrDefault(x => x.RowId == rowId);
-
+            var entity = dbContext.Entities.IncludeAll().ToList().FirstOrDefault(x => x.RowId == rowId) ??
+                CachedEntities.FirstOrDefault(x => x.RowId == rowId);
             return entity;
         }
 
@@ -111,20 +109,28 @@ namespace DataSync
         {
             ValidateOperationType(operationType);
 
+            var result = false;
             switch (operationType)
             {
                 case OracleNotificationInfo.Insert:
-                    return await DataSynchronizer<TEntity>.Insert(dataProcesser, dataProvider, changedEntity);
+                    result = await DataSynchronizer<TEntity>.Insert(dataProcesser, dataProvider, changedEntity);
+                    await dataProcesser.Sync(changedEntity);
+                    break;
                 case OracleNotificationInfo.Update:
                     var cachedEntity = CachedEntities.FirstOrDefault(x => x.RowId == changedEntity.RowId);
-                    return await DataSynchronizer<TEntity>.Update(dataProcesser, dataProvider, changedEntity,
+                    result = await DataSynchronizer<TEntity>.Update(dataProcesser, dataProvider, changedEntity,
                         cachedEntity);
+                    await dataProcesser.Sync(changedEntity);
+                    break;
                 case OracleNotificationInfo.Delete:
                     Utility.LogFatalOrThrowException(new Exception($"暂未处理删除数据操作, 实体类型: {EntityType}"));
-                    return false;
+                    result = false;
+                    break;
                 default:
-                    return false;
+                    result = false;
+                    break;
             }
+            return result;
         }
     }
 }

@@ -19,14 +19,29 @@ namespace Entity
         [JsonIgnore]
         public string DispatchSn { get; set; }
 
+        [Column("ST_TIME")]
+        [JsonIgnore]
+        public string SendTruckTime { get; set; }
+
+        [Column("CARRIERID")]
+        [JsonIgnore]
+        public string CarrierId { get; set; }
+
+        [JsonIgnore]
+        [ForeignKey("CarrierId")]
+        public Carrier Carrier { get; set; }
+
+        [Column("CONTRACTID")]
+        [JsonIgnore]
+        public string ContractId { get; set; }
+
+        [JsonIgnore]
+        [ForeignKey("ContractId")]
+        public Contract Contract { get; set; }
+
         [NotMapped]
         public override string UpdateTime { get; set; }
 
         public override string ComparerKey => Id;
-
-        public new static Expression<Func<SendTruck, bool>> SynchronizationWhere()
-        {
-            return x => true;
-        }
     }
 }

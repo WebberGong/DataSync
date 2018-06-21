@@ -12,7 +12,13 @@ namespace DataSync
 {
     public class DataNotifier<TEntity> where TEntity : BaseEntity
     {
+        private const string ResourceName = "ResourceName";
+
+        private const string Info = "Info";
+
         private const string RowId = "Rowid";
+
+        private const string QueryId = "QueryId";
 
         public static string QueryExpression => Assistance.GetQueryExpression<TEntity>();
 
@@ -38,23 +44,26 @@ namespace DataSync
                     {
                         foreach (DataRow row in args.Details.Rows)
                         {
-                            var rowId = row[RowId].ToString();
-                            var changedEntity = GetChangedEntity(dbContext, rowId, args.Info);
+                            var resourceName = (string)row[ResourceName];
+                            var info = (OracleNotificationInfo)row[Info];
+                            var rowId = (string)row[RowId];
+                            var queryId = (long)row[QueryId];
+                            var changedEntity = GetChangedEntity(dbContext, rowId, info);
                             if (changedEntity == null)
                                 continue;
                             var changedMsg =
-                                $"{args.Info} {string.Join(",", args.ResourceNames)}:{JsonConvert.SerializeObject(changedEntity)}";
+                                $"ResourceName: {resourceName}, Info: {info}, RowId: {rowId}, QueryId: {queryId}, Entity: {JsonConvert.SerializeObject(changedEntity)}";
                             await LogHelper.LogWarnAsync($"接收到数据修改通知: {changedMsg}");
                             if (dataProvider.SynchronizationWhere().Compile().Invoke(changedEntity))
                             {
-                                if (await ProcessChangedData(dataProcesser, dataProvider, changedEntity, args.Info))
-                                    MaintainCachedEntities(changedEntity, args.Info);
+                                if (await ProcessChangedData(dataProcesser, dataProvider, changedEntity, info))
+                                    MaintainCachedEntities(changedEntity, info);
                             }
                             else
                             {
                                 await LogHelper.LogInfoAsync(
                                     $"该数据状态不可用, 不需要同步: {changedMsg}");
-                                MaintainCachedEntities(changedEntity, args.Info);
+                                MaintainCachedEntities(changedEntity, info);
                             }
                         }
                     }
